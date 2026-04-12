@@ -1,0 +1,93 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 4: Swiss & High-Contrast",
+  "emotional_tone": "Authoritative, Precise, Technical, Uncluttered",
+  "domain": "Developer Tools / DevOps",
+  "design_philosophy": "Color is function only. 95% of the UI is monochrome, structured via rigid grids. Accent colors are strictly reserved for guiding critical actions (Record, Generate, Export). Asymmetry creates tension, while strict alignment maintains order.",
+  "colors": {
+    "background": "#0A0A0C",
+    "surface": "#121214",
+    "surface_elevated": "#1A1A1D",
+    "primary": "#002FA7",
+    "primary_hover": "#0038C7",
+    "accent_record": "#FF3B30",
+    "accent_ai": "#FFCC00",
+    "text_primary": "#FFFFFF",
+    "text_secondary": "#A1A1AA",
+    "border": "#27272A",
+    "border_focus": "#FFFFFF"
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Cabinet Grotesk, sans-serif",
+      "body": "IBM Plex Sans, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl font-black tracking-tighter leading-none",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight leading-tight",
+      "h3": "text-xl font-semibold tracking-tight",
+      "body": "text-sm sm:text-base font-normal leading-relaxed text-secondary",
+      "labels": "text-xs font-mono uppercase tracking-[0.2em] text-secondary",
+      "code": "text-sm font-mono leading-relaxed text-primary"
+    }
+  },
+  "layout_and_spacing": {
+    "grid_system": "MODE B: THE CONTROL ROOM GRID",
+    "container_classes": "grid grid-cols-1 md:grid-cols-12 gap-1 md:gap-4",
+    "spacing_philosophy": "Dense and compact for data, generous padding inside containers. Never center by default.",
+    "paddings": "p-6 or p-8 for main cards, p-4 for nested elements",
+    "alignment": "Strictly left-aligned. Optical alignment for icons and text."
+  },
+  "surface_strategies": {
+    "dashboard_cards": "GRID BORDERS - Container uses border-collapse. Items have border-r border-b border-border/40. No rounded corners (rounded-none).",
+    "code_editor_block": "RETRO-FUTURISM - Deep black background (#000000), 1px solid border, subtle monospace typography, syntax highlighting tailored to Jenkins (red/blue/amber keywords).",
+    "floating_nav": "GLASSMORPHISM - bg-black/60 with backdrop-blur-xl and backdrop-saturate-150. 1px bottom border border-white/10."
+  },
+  "components": {
+    "buttons": {
+      "primary": "rounded-none bg-primary text-white font-mono uppercase tracking-wider text-xs px-6 py-3 hover:bg-primary_hover transition-colors",
+      "record_action": "rounded-none bg-accent_record text-white font-bold px-6 py-3 hover:bg-red-600 shadow-[0_0_15px_rgba(255,59,48,0.5)]",
+      "ghost": "rounded-none bg-transparent text-text_secondary border border-border hover:border-white hover:text-white transition-all"
+    },
+    "inputs": {
+      "text": "rounded-none bg-surface border border-border px-4 py-2 text-white focus:border-white focus:ring-1 focus:ring-white transition-all",
+      "select": "Shadcn custom select - stripped of border-radius, harsh contrasting borders."
+    },
+    "tables_lists": "Row items separated by 1px solid #27272A. Hover states invert the background slightly (bg-white/5).",
+    "modals": "Solid background (no glass for technical data), harsh 1px white border, drop-shadow-2xl."
+  },
+  "motion_and_interactions": {
+    "hover_states": "Hard cuts or fast transitions (0.15s ease-out). Items snap to active states.",
+    "focus_states": "High contrast 2px solid white outline. No soft blue rings.",
+    "loaders": "ASCII art spinners or harsh geometric loaders (no soft circular spinners)."
+  },
+  "icons_and_assets": {
+    "icon_library": "Phosphor Icons (@phosphor-icons/react) - strict geometric and technical feel. Weight: bold or duotone.",
+    "install_command": "yarn add @phosphor-icons/react"
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://images.unsplash.com/photo-1544388691-832ee130b371?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzV8MHwxfHNlYXJjaHwyfHxhYnN0cmFjdCUyMHByZWNpc2UlMjBncmlkJTIwYXJjaGl0ZWN0dXJlfGVufDB8fHx8MTc3NjAzMDUwNnww&ixlib=rb-4.1.0&q=85",
+        "category": "empty_state_background",
+        "description": "Abstract precise grid architecture. Use as a low-opacity background for the empty state of the documentation viewer to break up the solid black canvas."
+      },
+      {
+        "url": "https://images.pexels.com/photos/27864656/pexels-photo-27864656.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "auth_hero",
+        "description": "Intricate abstract architectural image with intersecting geometric lines. Perfect for a split-screen login/auth page or loading screen."
+      }
+    ]
+  },
+  "specific_feature_guidelines": {
+    "screen_capture_module": "Must feature a sticky or floating 'Command Center' bar. The Record button must stand out using the accent_record color. When recording is active, use a pulsating border.",
+    "ai_generation_panel": "Use the accent_ai (Yellow) for the 'Generate' action. Display a terminal-like streaming text effect while Claude/Gemini is generating the docs.",
+    "jenkins_syntax": "Custom syntax highlighting block. Keywords (pipeline, agent, stages) in accent_ai or primary blue. Strings in green. Background pitch black.",
+    "export_actions": "Grouped in the top right. Monospace ghost buttons for PDF and Word."
+  },
+  "accessibility_and_testing": {
+    "contrast": "Ensure all text meets APCA standards. Text over surfaces must maintain a 4.5:1 ratio minimum.",
+    "data_testid": "MANDATORY. Use kebab-case, role-based tags like data-testid='screen-capture-btn', data-testid='generate-docs-submit'."
+  }
+}
