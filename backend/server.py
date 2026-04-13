@@ -24,6 +24,7 @@ from reportlab.lib.enums import TA_LEFT
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import re
+import xml.etree.ElementTree as ET
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -80,9 +81,20 @@ class FileUploadResponse(BaseModel):
     size: int
     created_at: str
 
+class XmlUploadResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    storage_path: str
+    original_filename: str
+    content_type: str
+    size: int
+    parsed_data: dict
+    created_at: str
+
 class DocumentationCreate(BaseModel):
     title: str
-    file_ids: List[str]
+    file_ids: List[str] = []
+    xml_file_ids: List[str] = []
     template_id: Optional[str] = None
     ai_provider: str = "claude"
 
@@ -118,6 +130,134 @@ class Template(BaseModel):
 async def root():
     return {"message": "Jenkins Documentation Generator API"}
 
+def parse_jenkins_xml(xml_content: str) -> dict:
+    """Parse Jenkins config.xml and extract key fields."""
+    parsed = {
+        "job_type": "unknown",
+        "description": "",
+        "parameters": [],
+        "scm": {},
+        "triggers": [],
+        "build_steps": [],
+        "post_build_actions": [],
+        "environment_vars": [],
+        "pipeline_script": "",
+        "agent_label": "",
+        "properties": [],
+    }
+    try:
+        # Fix XML 1.1 declaration (Python's ET only supports 1.0)
+        cleaned = re.sub(r"<\?xml[^?]*\?>", '<?xml version="1.0" encoding="UTF-8"?>', xml_content)
+        root = ET.fromstring(cleaned)
+        parsed["job_type"] = root.tag
+
+        desc = root.find("description")
+        if desc is not None and desc.text:
+            parsed["description"] = desc.text.strip()
+
+        # Agent / node label
+        for tag in ["assignedNode", "label"]:
+            node = root.find(tag)
+            if node is not None and node.text:
+                parsed["agent_label"] = node.text.strip()
+                break
+
+        # Parameters
+        for param_def in root.iter():
+            if param_def.tag.endswith("ParameterDefinition"):
+                p = {}
+                name_el = param_def.find("name")
+                if name_el is not None and name_el.text:
+                    p["name"] = name_el.text
+                default_el = param_def.find("defaultValue")
+                if default_el is not None and default_el.text:
+                    p["default"] = default_el.text
+                desc_el = param_def.find("description")
+                if desc_el is not None and desc_el.text:
+                    p["description"] = desc_el.text
+                p["type"] = param_def.tag.replace("ParameterDefinition", "").split(".")[-1]
+                if p.get("name"):
+                    parsed["parameters"].append(p)
+
+        # SCM (Git)
+        for scm in root.iter("scm"):
+            scm_class = scm.get("class", "")
+            if "git" in scm_class.lower() or "Git" in scm_class:
+                urls = [u.text for u in scm.iter("url") if u.text]
+                branches = [b.text for b in scm.iter("name") if b.text and "/" in b.text]
+                parsed["scm"] = {"type": "git", "urls": urls, "branches": branches}
+                break
+
+        # Triggers
+        for trigger in root.iter("triggers"):
+            for child in trigger:
+                t = {"type": child.tag}
+                spec = child.find("spec")
+                if spec is not None and spec.text:
+                    t["schedule"] = spec.text.strip()
+                parsed["triggers"].append(t)
+
+        # Build steps (shell, batch, etc.)
+        for builders in root.iter("builders"):
+            for step in builders:
+                s = {"type": step.tag}
+                cmd = step.find("command")
+                if cmd is not None and cmd.text:
+                    s["command"] = cmd.text.strip()[:500]
+                script_el = step.find("scriptText")
+                if script_el is not None and script_el.text:
+                    s["script"] = script_el.text.strip()[:500]
+                parsed["build_steps"].append(s)
+
+        # Pipeline script (workflow/pipeline jobs)
+        for script_el in root.iter("script"):
+            if script_el.text and len(script_el.text.strip()) > 10:
+                parsed["pipeline_script"] = script_el.text.strip()
+                break
+
+        # Script path for pipeline from SCM
+        script_path = root.find(".//scriptPath")
+        if script_path is not None and script_path.text:
+            parsed["pipeline_script"] = f"Jenkinsfile path: {script_path.text}"
+
+        # Post-build actions
+        for publishers in root.iter("publishers"):
+            for action in publishers:
+                a = {"type": action.tag}
+                parsed["post_build_actions"].append(a)
+
+        # Environment variables
+        for env_el in root.iter("EnvInjectJobPropertyInfo"):
+            content = env_el.find("propertiesContent")
+            if content is not None and content.text:
+                for line in content.text.strip().split("\n"):
+                    if "=" in line:
+                        parsed["environment_vars"].append(line.strip())
+        for env_el in root.iter("envVars"):
+            for tree_map in env_el.iter():
+                if tree_map.tag == "string":
+                    parsed["environment_vars"].append(tree_map.text or "")
+
+    except ET.ParseError as e:
+        parsed["parse_error"] = str(e)
+        # Fallback: try to extract key info with regex
+        try:
+            pipeline_match = re.search(r'<script>(.*?)</script>', xml_content, re.DOTALL)
+            if pipeline_match:
+                parsed["pipeline_script"] = pipeline_match.group(1).strip()
+            desc_match = re.search(r'<description>(.*?)</description>', xml_content, re.DOTALL)
+            if desc_match:
+                parsed["description"] = desc_match.group(1).strip()
+            for m in re.finditer(r'<name>([\w_-]+)</name>\s*<description>(.*?)</description>', xml_content, re.DOTALL):
+                parsed["parameters"].append({"name": m.group(1), "description": m.group(2).strip(), "type": "String"})
+            # Detect job type from root tag
+            root_match = re.match(r'<\?xml[^?]*\?>\s*<(\S+)', xml_content)
+            if root_match:
+                parsed["job_type"] = root_match.group(1).split()[0]
+        except Exception:
+            pass
+    return parsed
+
 @api_router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(file: UploadFile = File(...)):
     try:
@@ -141,6 +281,49 @@ async def upload_file(file: UploadFile = File(...)):
         logging.error(f"Upload error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@api_router.post("/upload-xml", response_model=XmlUploadResponse)
+async def upload_xml(file: UploadFile = File(...)):
+    try:
+        data = await file.read()
+        xml_content = data.decode("utf-8", errors="replace")
+        parsed_data = parse_jenkins_xml(xml_content)
+
+        ext = file.filename.split(".")[-1] if "." in file.filename else "xml"
+        path = f"{APP_NAME}/xml/{uuid.uuid4()}.{ext}"
+        result = put_object(path, data, "application/xml")
+
+        xml_doc = {
+            "id": str(uuid.uuid4()),
+            "storage_path": result["path"],
+            "original_filename": file.filename,
+            "content_type": "application/xml",
+            "size": result["size"],
+            "raw_xml": xml_content,
+            "parsed_data": parsed_data,
+            "is_deleted": False,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.xml_files.insert_one(xml_doc)
+        return XmlUploadResponse(
+            id=xml_doc["id"],
+            storage_path=xml_doc["storage_path"],
+            original_filename=xml_doc["original_filename"],
+            content_type=xml_doc["content_type"],
+            size=xml_doc["size"],
+            parsed_data=xml_doc["parsed_data"],
+            created_at=xml_doc["created_at"]
+        )
+    except Exception as e:
+        logging.error(f"XML upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/xml-files/{xml_id}")
+async def get_xml_file(xml_id: str):
+    record = await db.xml_files.find_one({"id": xml_id, "is_deleted": False}, {"_id": 0, "raw_xml": 0})
+    if not record:
+        raise HTTPException(status_code=404, detail="XML file not found")
+    return record
+
 @api_router.get("/files/{file_id}")
 async def get_file(file_id: str, authorization: str = Header(None), auth: str = Query(None)):
     try:
@@ -159,75 +342,129 @@ async def get_file(file_id: str, authorization: str = Header(None), auth: str = 
 @api_router.post("/generate", response_model=Documentation)
 async def generate_documentation(doc_create: DocumentationCreate):
     try:
-        # Get file URLs
-        files = await db.files.find({"id": {"$in": doc_create.file_ids}, "is_deleted": False}, {"_id": 0}).to_list(100)
-        
-        if not files:
-            raise HTTPException(status_code=400, detail="No valid files found")
-        
+        has_images = len(doc_create.file_ids) > 0
+        has_xml = len(doc_create.xml_file_ids) > 0
+
+        if not has_images and not has_xml:
+            raise HTTPException(status_code=400, detail="Please provide screenshots or XML config files")
+
         # Get template if provided
         template_prompt = ""
         if doc_create.template_id:
             template = await db.templates.find_one({"id": doc_create.template_id}, {"_id": 0})
             if template:
                 template_prompt = template["prompt_template"]
-        
-        # Build prompt
-        base_prompt = template_prompt if template_prompt else """You are an expert DevOps documentation specialist. Analyze the provided Jenkins pipeline screenshots and create comprehensive, professional documentation.
+
+        # Build system prompt
+        base_prompt = template_prompt if template_prompt else """You are an expert DevOps documentation specialist with deep knowledge of Jenkins pipelines, CI/CD, and infrastructure automation.
+
+Analyze the provided Jenkins pipeline information and create comprehensive, professional documentation in Markdown format.
 
 Focus on:
 - Pipeline structure and stages
+- Job parameters and their purposes
+- SCM configuration (Git repos, branches)
+- Build steps and shell commands
 - Environment variables and configurations
-- Build steps and deployment processes
-- Error handling and notifications
-- Best practices and optimizations
+- Triggers and scheduling
+- Post-build actions and notifications
+- Deployment processes
+- Error handling and best practices
 
-Provide clear, well-structured documentation in Markdown format with proper headings, code blocks, and explanations."""
-        
-        # Prepare images for AI
-        image_data = []
-        for f in files:
-            try:
-                data, _ = get_object(f["storage_path"])
-                b64_data = base64.b64encode(data).decode('utf-8')
-                image_data.append(b64_data)
-            except:
-                continue
-        
-        if not image_data:
-            raise HTTPException(status_code=400, detail="Could not process images")
-        
+Provide clear, well-structured documentation with proper headings, code blocks (use ```groovy or ```bash for Jenkins code), and explanations."""
+
+        # Build user message parts
+        message_parts = []
+        message_parts.append(f"Create detailed documentation for: {doc_create.title}\n")
+
+        # Process XML config files
+        if has_xml:
+            xml_files = await db.xml_files.find(
+                {"id": {"$in": doc_create.xml_file_ids}, "is_deleted": False},
+                {"_id": 0}
+            ).to_list(100)
+
+            for i, xf in enumerate(xml_files):
+                parsed = xf.get("parsed_data", {})
+                raw_xml = xf.get("raw_xml", "")
+
+                # Pre-parsed structured summary
+                message_parts.append(f"\n--- Jenkins Job Config #{i+1}: {xf['original_filename']} ---")
+                message_parts.append(f"Job Type: {parsed.get('job_type', 'unknown')}")
+                if parsed.get("description"):
+                    message_parts.append(f"Description: {parsed['description']}")
+                if parsed.get("agent_label"):
+                    message_parts.append(f"Agent/Node: {parsed['agent_label']}")
+                if parsed.get("parameters"):
+                    message_parts.append("Parameters:")
+                    for p in parsed["parameters"]:
+                        message_parts.append(f"  - {p.get('name', '?')} ({p.get('type', '?')}): {p.get('description', 'N/A')} [default: {p.get('default', 'N/A')}]")
+                if parsed.get("scm", {}).get("urls"):
+                    message_parts.append(f"SCM URLs: {', '.join(parsed['scm']['urls'])}")
+                    if parsed["scm"].get("branches"):
+                        message_parts.append(f"Branches: {', '.join(parsed['scm']['branches'])}")
+                if parsed.get("triggers"):
+                    message_parts.append("Triggers:")
+                    for t in parsed["triggers"]:
+                        message_parts.append(f"  - {t.get('type', '?')}: {t.get('schedule', 'N/A')}")
+                if parsed.get("build_steps"):
+                    message_parts.append("Build Steps:")
+                    for s in parsed["build_steps"]:
+                        message_parts.append(f"  - [{s.get('type', '?')}] {s.get('command', s.get('script', ''))[:200]}")
+                if parsed.get("pipeline_script"):
+                    message_parts.append(f"Pipeline Script:\n```groovy\n{parsed['pipeline_script'][:2000]}\n```")
+                if parsed.get("post_build_actions"):
+                    message_parts.append("Post-build Actions:")
+                    for a in parsed["post_build_actions"]:
+                        message_parts.append(f"  - {a.get('type', '?')}")
+                if parsed.get("environment_vars"):
+                    message_parts.append("Environment Variables:")
+                    for ev in parsed["environment_vars"][:20]:
+                        message_parts.append(f"  - {ev}")
+
+                # Raw XML (truncated if very large)
+                raw_truncated = raw_xml[:8000] if len(raw_xml) > 8000 else raw_xml
+                message_parts.append(f"\nFull config.xml content:\n```xml\n{raw_truncated}\n```")
+
+        # Process screenshot files
+        if has_images:
+            files = await db.files.find(
+                {"id": {"$in": doc_create.file_ids}, "is_deleted": False},
+                {"_id": 0}
+            ).to_list(100)
+            if files:
+                message_parts.append("\nAdditionally, screenshots of the Jenkins pipeline are provided for visual context.")
+
+        user_text = "\n".join(message_parts)
+
         # Generate documentation with AI
         chat = LlmChat(
             api_key=EMERGENT_KEY,
             session_id=f"doc-gen-{uuid.uuid4()}",
             system_message=base_prompt
         )
-        
+
         if doc_create.ai_provider == "claude":
             chat.with_model("anthropic", "claude-sonnet-4-5-20250929")
         else:
             chat.with_model("gemini", "gemini-3-flash-preview")
-        
-        # Create message with images
-        user_message = UserMessage(
-            text=f"Analyze these Jenkins pipeline screenshots and create detailed documentation for: {doc_create.title}"
-        )
-        
+
+        user_message = UserMessage(text=user_text)
         response = await chat.send_message(user_message)
-        
+
         # Save documentation
+        all_file_ids = doc_create.file_ids + doc_create.xml_file_ids
         doc_data = {
             "id": str(uuid.uuid4()),
             "title": doc_create.title,
             "content": response,
-            "file_ids": doc_create.file_ids,
+            "file_ids": all_file_ids,
             "template_id": doc_create.template_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "updated_at": datetime.now(timezone.utc).isoformat()
         }
         await db.documentations.insert_one(doc_data)
-        
+
         return Documentation(**doc_data)
     except HTTPException:
         raise

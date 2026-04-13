@@ -10,6 +10,10 @@ import {
   Lightning,
   Trash,
   CircleNotch,
+  FileCode,
+  CaretDown,
+  CaretUp,
+  CheckCircle,
 } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,17 +29,195 @@ import {
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+function XmlPreviewCard({ xmlFile, onRemove }) {
+  const [expanded, setExpanded] = useState(false);
+  const parsed = xmlFile.parsed_data || {};
+
+  return (
+    <div
+      className="bg-[#1A1A1D] border border-[#27272A] p-4"
+      data-testid={`xml-preview-${xmlFile.id}`}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <FileCode size={18} weight="bold" className="text-[#FFCC00]" />
+          <span className="text-sm text-white font-mono truncate">
+            {xmlFile.original_filename}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setExpanded(!expanded)}
+            className="text-[#A1A1AA] hover:text-white transition-colors"
+          >
+            {expanded ? (
+              <CaretUp size={16} weight="bold" />
+            ) : (
+              <CaretDown size={16} weight="bold" />
+            )}
+          </button>
+          <button
+            onClick={onRemove}
+            className="text-[#FF3B30] hover:text-white transition-colors"
+          >
+            <Trash size={16} weight="bold" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 mb-2">
+        <span className="px-2 py-0.5 bg-[#002FA7] text-white text-xs font-mono">
+          {parsed.job_type || "unknown"}
+        </span>
+        {parsed.parameters?.length > 0 && (
+          <span className="px-2 py-0.5 bg-[#27272A] text-[#A1A1AA] text-xs font-mono">
+            {parsed.parameters.length} param(s)
+          </span>
+        )}
+        {parsed.build_steps?.length > 0 && (
+          <span className="px-2 py-0.5 bg-[#27272A] text-[#A1A1AA] text-xs font-mono">
+            {parsed.build_steps.length} build step(s)
+          </span>
+        )}
+        {parsed.scm?.urls?.length > 0 && (
+          <span className="px-2 py-0.5 bg-[#27272A] text-[#A1A1AA] text-xs font-mono">
+            SCM configured
+          </span>
+        )}
+        {parsed.pipeline_script && (
+          <span className="px-2 py-0.5 bg-[#FFCC00] text-black text-xs font-mono font-bold">
+            Pipeline
+          </span>
+        )}
+      </div>
+
+      {parsed.description && (
+        <p className="text-xs text-[#A1A1AA] mb-2 truncate">
+          {parsed.description}
+        </p>
+      )}
+
+      {expanded && (
+        <div className="mt-3 space-y-3 border-t border-[#27272A] pt-3">
+          {parsed.agent_label && (
+            <div>
+              <span className="text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
+                Agent
+              </span>
+              <p className="text-sm text-white font-mono">{parsed.agent_label}</p>
+            </div>
+          )}
+
+          {parsed.parameters?.length > 0 && (
+            <div>
+              <span className="text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
+                Parameters
+              </span>
+              <div className="mt-1 space-y-1">
+                {parsed.parameters.map((p, i) => (
+                  <div key={i} className="text-xs font-mono text-white">
+                    <span className="text-[#FFCC00]">{p.name}</span>
+                    <span className="text-[#A1A1AA]">
+                      {" "}
+                      ({p.type}) = {p.default || "N/A"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {parsed.scm?.urls?.length > 0 && (
+            <div>
+              <span className="text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
+                SCM
+              </span>
+              {parsed.scm.urls.map((url, i) => (
+                <p key={i} className="text-xs text-white font-mono truncate">
+                  {url}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {parsed.triggers?.length > 0 && (
+            <div>
+              <span className="text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
+                Triggers
+              </span>
+              {parsed.triggers.map((t, i) => (
+                <p key={i} className="text-xs text-white font-mono">
+                  {t.type}: {t.schedule || "N/A"}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {parsed.build_steps?.length > 0 && (
+            <div>
+              <span className="text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
+                Build Steps
+              </span>
+              {parsed.build_steps.map((s, i) => (
+                <div key={i} className="mt-1">
+                  <span className="text-xs text-[#002FA7] font-mono">
+                    [{s.type}]
+                  </span>
+                  {(s.command || s.script) && (
+                    <pre className="text-xs text-[#A1A1AA] font-mono mt-1 bg-black p-2 overflow-x-auto max-h-24 overflow-y-auto">
+                      {(s.command || s.script).substring(0, 300)}
+                    </pre>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {parsed.pipeline_script && (
+            <div>
+              <span className="text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
+                Pipeline Script
+              </span>
+              <pre className="text-xs text-white font-mono mt-1 bg-black p-2 overflow-x-auto max-h-40 overflow-y-auto border border-[#27272A]">
+                {parsed.pipeline_script.substring(0, 500)}
+                {parsed.pipeline_script.length > 500 && "..."}
+              </pre>
+            </div>
+          )}
+
+          {parsed.post_build_actions?.length > 0 && (
+            <div>
+              <span className="text-xs font-mono uppercase tracking-wider text-[#A1A1AA]">
+                Post-Build Actions
+              </span>
+              {parsed.post_build_actions.map((a, i) => (
+                <p key={i} className="text-xs text-white font-mono">
+                  {a.type}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function NewDocumentation() {
   const navigate = useNavigate();
   const [title, setTitle] = useState("");
   const [files, setFiles] = useState([]);
   const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [xmlFiles, setXmlFiles] = useState([]);
+  const [uploadedXmlFiles, setUploadedXmlFiles] = useState([]);
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [aiProvider, setAiProvider] = useState("claude");
   const [generating, setGenerating] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [uploadingXml, setUploadingXml] = useState(false);
   const fileInputRef = useRef(null);
+  const xmlInputRef = useRef(null);
   const videoRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -58,6 +240,11 @@ export default function NewDocumentation() {
     setFiles([...files, ...selectedFiles]);
   };
 
+  const handleXmlSelect = (e) => {
+    const selectedFiles = Array.from(e.target.files);
+    setXmlFiles([...xmlFiles, ...selectedFiles]);
+  };
+
   const handleUpload = async () => {
     if (files.length === 0) {
       toast.error("Please select files to upload");
@@ -67,7 +254,6 @@ export default function NewDocumentation() {
     const uploadPromises = files.map(async (file) => {
       const formData = new FormData();
       formData.append("file", file);
-
       const response = await axios.post(`${API}/upload`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
@@ -82,6 +268,35 @@ export default function NewDocumentation() {
     } catch (error) {
       toast.error("Upload failed");
       console.error(error);
+    }
+  };
+
+  const handleXmlUpload = async () => {
+    if (xmlFiles.length === 0) {
+      toast.error("Please select XML files to upload");
+      return;
+    }
+
+    setUploadingXml(true);
+    const uploadPromises = xmlFiles.map(async (file) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const response = await axios.post(`${API}/upload-xml`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return response.data;
+    });
+
+    try {
+      const uploaded = await Promise.all(uploadPromises);
+      setUploadedXmlFiles([...uploadedXmlFiles, ...uploaded]);
+      setXmlFiles([]);
+      toast.success(`Parsed ${uploaded.length} config.xml file(s)`);
+    } catch (error) {
+      toast.error("XML upload failed");
+      console.error(error);
+    } finally {
+      setUploadingXml(false);
     }
   };
 
@@ -107,7 +322,7 @@ export default function NewDocumentation() {
         const file = new File([blob], `recording-${Date.now()}.webm`, {
           type: "video/webm",
         });
-        setFiles([...files, file]);
+        setFiles((prev) => [...prev, file]);
         stream.getTracks().forEach((track) => track.stop());
         toast.success("Recording saved");
       };
@@ -151,7 +366,7 @@ export default function NewDocumentation() {
         const file = new File([blob], `screenshot-${Date.now()}.png`, {
           type: "image/png",
         });
-        setFiles([...files, file]);
+        setFiles((prev) => [...prev, file]);
         toast.success("Screenshot captured");
       });
     } catch (error) {
@@ -168,14 +383,24 @@ export default function NewDocumentation() {
     setUploadedFiles(uploadedFiles.filter((_, i) => i !== index));
   };
 
+  const removeXmlFile = (index) => {
+    setXmlFiles(xmlFiles.filter((_, i) => i !== index));
+  };
+
+  const removeUploadedXml = (index) => {
+    setUploadedXmlFiles(uploadedXmlFiles.filter((_, i) => i !== index));
+  };
+
+  const hasContent = uploadedFiles.length > 0 || uploadedXmlFiles.length > 0;
+
   const handleGenerate = async () => {
     if (!title) {
       toast.error("Please enter a title");
       return;
     }
 
-    if (uploadedFiles.length === 0) {
-      toast.error("Please upload at least one file");
+    if (!hasContent) {
+      toast.error("Please upload screenshots or XML config files");
       return;
     }
 
@@ -187,7 +412,9 @@ export default function NewDocumentation() {
         {
           title,
           file_ids: uploadedFiles.map((f) => f.id),
-          template_id: selectedTemplate === "none" ? null : selectedTemplate || null,
+          xml_file_ids: uploadedXmlFiles.map((f) => f.id),
+          template_id:
+            selectedTemplate === "none" ? null : selectedTemplate || null,
           ai_provider: aiProvider,
         },
         { timeout: 180000 }
@@ -212,16 +439,17 @@ export default function NewDocumentation() {
             CREATE DOCUMENTATION
           </h1>
           <p className="text-base text-[#A1A1AA]">
-            Upload screenshots or record your screen to generate AI-powered
-            documentation
+            Upload screenshots, record your screen, or upload Jenkins config.xml
+            files to generate AI-powered documentation
           </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
+            {/* Screen Capture Section */}
             <div className="bg-[#121214] border border-[#27272A] p-6">
               <h2 className="text-xl font-bold text-white mb-6 font-heading">
-                COMMAND CENTER
+                SCREEN CAPTURE
               </h2>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
@@ -309,7 +537,12 @@ export default function NewDocumentation() {
               {uploadedFiles.length > 0 && (
                 <div>
                   <h3 className="text-sm font-mono uppercase tracking-wider text-[#A1A1AA] mb-3">
-                    Uploaded Files ({uploadedFiles.length})
+                    <CheckCircle
+                      size={14}
+                      weight="bold"
+                      className="inline mr-1 text-green-500"
+                    />
+                    Uploaded Screenshots ({uploadedFiles.length})
                   </h3>
                   <div className="space-y-2">
                     {uploadedFiles.map((file, index) => (
@@ -332,8 +565,121 @@ export default function NewDocumentation() {
                 </div>
               )}
             </div>
+
+            {/* XML Config Upload Section */}
+            <div className="bg-[#121214] border border-[#27272A] p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-white font-heading">
+                  JENKINS CONFIG.XML
+                </h2>
+                <span className="text-xs font-mono uppercase tracking-wider text-[#A1A1AA] bg-[#1A1A1D] px-3 py-1 border border-[#27272A]">
+                  Auto-Parsed
+                </span>
+              </div>
+
+              <button
+                onClick={() => xmlInputRef.current?.click()}
+                className="w-full p-6 border-2 border-dashed border-[#27272A] hover:border-[#FFCC00] text-[#A1A1AA] hover:text-[#FFCC00] transition-all flex flex-col items-center gap-3 mb-4"
+                data-testid="upload-xml-btn"
+              >
+                <FileCode size={32} weight="bold" />
+                <span className="text-sm font-mono">
+                  Drop or click to upload config.xml files
+                </span>
+                <span className="text-xs text-[#A1A1AA]">
+                  Supports multiple files for multi-job pipelines
+                </span>
+              </button>
+
+              <input
+                type="file"
+                ref={xmlInputRef}
+                onChange={handleXmlSelect}
+                accept=".xml,text/xml,application/xml"
+                multiple
+                className="hidden"
+              />
+
+              {xmlFiles.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="text-sm font-mono uppercase tracking-wider text-[#A1A1AA] mb-3">
+                    Selected XML Files
+                  </h3>
+                  <div className="space-y-2">
+                    {xmlFiles.map((file, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between p-3 bg-[#1A1A1D] border border-[#27272A]"
+                      >
+                        <div className="flex items-center gap-2">
+                          <FileCode
+                            size={16}
+                            weight="bold"
+                            className="text-[#FFCC00]"
+                          />
+                          <span className="text-sm text-white truncate">
+                            {file.name}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => removeXmlFile(index)}
+                          className="text-[#FF3B30] hover:text-white transition-colors"
+                        >
+                          <Trash size={16} weight="bold" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    onClick={handleXmlUpload}
+                    disabled={uploadingXml}
+                    className="w-full mt-4 bg-[#FFCC00] text-black hover:bg-[#FFD700] font-bold"
+                    data-testid="upload-xml-submit-btn"
+                  >
+                    {uploadingXml ? (
+                      <>
+                        <CircleNotch
+                          size={16}
+                          weight="bold"
+                          className="animate-spin mr-2"
+                        />
+                        PARSING...
+                      </>
+                    ) : (
+                      <>
+                        <FileCode size={16} weight="bold" className="mr-2" />
+                        PARSE & UPLOAD XML
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+
+              {uploadedXmlFiles.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-mono uppercase tracking-wider text-[#A1A1AA] mb-3">
+                    <CheckCircle
+                      size={14}
+                      weight="bold"
+                      className="inline mr-1 text-green-500"
+                    />
+                    Parsed Configs ({uploadedXmlFiles.length})
+                  </h3>
+                  <div className="space-y-3">
+                    {uploadedXmlFiles.map((xmlFile, index) => (
+                      <XmlPreviewCard
+                        key={xmlFile.id}
+                        xmlFile={xmlFile}
+                        onRemove={() => removeUploadedXml(index)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
+          {/* Configuration Sidebar */}
           <div className="space-y-6">
             <div className="bg-[#121214] border border-[#27272A] p-6">
               <h2 className="text-xl font-bold text-white mb-6 font-heading">
@@ -397,9 +743,42 @@ export default function NewDocumentation() {
                   </Select>
                 </div>
 
+                {/* Status summary */}
+                <div className="bg-[#0A0A0C] border border-[#27272A] p-4">
+                  <span className="text-xs font-mono uppercase tracking-wider text-[#A1A1AA] block mb-2">
+                    Ready to generate
+                  </span>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-[#A1A1AA]">Screenshots</span>
+                      <span
+                        className={
+                          uploadedFiles.length > 0
+                            ? "text-green-500 font-mono"
+                            : "text-[#27272A] font-mono"
+                        }
+                      >
+                        {uploadedFiles.length}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-[#A1A1AA]">XML Configs</span>
+                      <span
+                        className={
+                          uploadedXmlFiles.length > 0
+                            ? "text-[#FFCC00] font-mono"
+                            : "text-[#27272A] font-mono"
+                        }
+                      >
+                        {uploadedXmlFiles.length}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 <Button
                   onClick={handleGenerate}
-                  disabled={generating || uploadedFiles.length === 0}
+                  disabled={generating || !hasContent}
                   className="w-full bg-[#FFCC00] text-black hover:bg-[#FFD700] font-bold py-3"
                   data-testid="generate-docs-btn"
                 >

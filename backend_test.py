@@ -12,6 +12,7 @@ class JenkinsDocGenAPITester:
         self.tests_run = 0
         self.tests_passed = 0
         self.uploaded_file_ids = []
+        self.uploaded_xml_ids = []
         self.created_doc_id = None
         self.created_template_id = None
 
@@ -75,6 +76,110 @@ class JenkinsDocGenAPITester:
             200
         )
         return success
+
+    def test_xml_upload(self):
+        """Test XML config file upload functionality"""
+        # Read the test config.xml file
+        try:
+            with open('/tmp/test_config.xml', 'rb') as f:
+                xml_content = f.read()
+        except FileNotFoundError:
+            print("❌ Test config.xml file not found at /tmp/test_config.xml")
+            return False
+        
+        files = {'file': ('test_config.xml', BytesIO(xml_content), 'application/xml')}
+        
+        success, response = self.run_test(
+            "XML Upload",
+            "POST",
+            "upload-xml",
+            200,
+            files=files
+        )
+        
+        if success and 'id' in response:
+            self.uploaded_xml_ids.append(response['id'])
+            print(f"   Uploaded XML file ID: {response['id']}")
+            print(f"   Parsed job type: {response.get('parsed_data', {}).get('job_type', 'unknown')}")
+            print(f"   Parameters found: {len(response.get('parsed_data', {}).get('parameters', []))}")
+            return True
+        return False
+
+    def test_get_xml_file(self):
+        """Test XML file retrieval"""
+        if not self.uploaded_xml_ids:
+            print("❌ No uploaded XML files to test retrieval")
+            return False
+            
+        xml_id = self.uploaded_xml_ids[0]
+        success, response = self.run_test(
+            "Get XML File",
+            "GET",
+            f"xml-files/{xml_id}",
+            200
+        )
+        
+        if success:
+            print(f"   Retrieved XML file: {response.get('original_filename', 'unknown')}")
+            print(f"   Job type: {response.get('parsed_data', {}).get('job_type', 'unknown')}")
+            return True
+        return False
+
+    def test_generate_documentation_with_xml(self):
+        """Test documentation generation with XML files only"""
+        if not self.uploaded_xml_ids:
+            print("❌ No uploaded XML files for documentation generation")
+            return False
+            
+        doc_data = {
+            "title": "Test Jenkins XML-Only Documentation",
+            "file_ids": [],
+            "xml_file_ids": self.uploaded_xml_ids,
+            "template_id": self.created_template_id,
+            "ai_provider": "claude"
+        }
+        
+        success, response = self.run_test(
+            "Generate Documentation (XML Only)",
+            "POST",
+            "generate",
+            200,
+            data=doc_data
+        )
+        
+        if success and 'id' in response:
+            print(f"   Generated XML documentation ID: {response['id']}")
+            print(f"   Content preview: {response.get('content', '')[:100]}...")
+            return True
+        return False
+
+    def test_generate_documentation_mixed(self):
+        """Test documentation generation with both files and XML"""
+        if not self.uploaded_file_ids or not self.uploaded_xml_ids:
+            print("❌ Need both uploaded files and XML files for mixed generation test")
+            return False
+            
+        doc_data = {
+            "title": "Test Jenkins Mixed Documentation",
+            "file_ids": self.uploaded_file_ids,
+            "xml_file_ids": self.uploaded_xml_ids,
+            "template_id": self.created_template_id,
+            "ai_provider": "claude"
+        }
+        
+        success, response = self.run_test(
+            "Generate Documentation (Mixed)",
+            "POST",
+            "generate",
+            200,
+            data=doc_data
+        )
+        
+        if success and 'id' in response:
+            print(f"   Generated mixed documentation ID: {response['id']}")
+            print(f"   Content preview: {response.get('content', '')[:100]}...")
+            return True
+        return False
 
     def test_file_upload(self):
         """Test file upload functionality"""
@@ -301,9 +406,13 @@ def main():
         tester.test_root_endpoint,
         tester.test_file_upload,
         tester.test_get_file,
+        tester.test_xml_upload,
+        tester.test_get_xml_file,
         tester.test_create_template,
         tester.test_get_templates,
         tester.test_generate_documentation,
+        tester.test_generate_documentation_with_xml,
+        tester.test_generate_documentation_mixed,
         tester.test_get_documentations,
         tester.test_get_documentation,
         tester.test_update_documentation,
