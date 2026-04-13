@@ -86,10 +86,7 @@ python -m venv venv
 source venv/bin/activate   # On Windows: venv\Scripts\activate
 
 # Install dependencies
-pip install -r requirements.txt
-
-# If emergentintegrations fails to install from the default index:
-pip install emergentintegrations --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/
+pip install -r requirements.txt --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/
 ```
 
 ### 3. Configure backend environment variables
