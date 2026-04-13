@@ -25,7 +25,7 @@ Build an app that can create documentation using AI while seeing my screen. This
 - Documentation history management
 - Export to PDF and Word Document
 
-## What's Been Implemented (April 12, 2026)
+## What's Been Implemented (April 12-13, 2026)
 - Full backend API with CRUD for documentations, templates, files
 - AI documentation generation endpoint using emergentintegrations
 - Object storage integration for file uploads
@@ -35,6 +35,13 @@ Build an app that can create documentation using AI while seeing my screen. This
 - Dark Swiss/High-Contrast design theme
 - 5 pre-seeded pipeline templates (CI/CD, Helm Values, ECR+Bitbucket, DB+Secrets, Jenkins DSL)
 - Screen capture (upload, screenshot, recording) via browser APIs
+- **NEW: Jenkins config.xml upload with auto-parsing** (April 13)
+  - XML parser extracts: job type, parameters, SCM, triggers, build steps, pipeline script, post-build actions, env vars
+  - Pre-parsed structured data + raw XML both sent to AI for comprehensive understanding
+  - Standalone XML-only generation or combined with screenshots
+  - Multiple config.xml support for multi-job pipelines
+  - Expandable preview cards showing parsed structure before generation
+  - Regex fallback for malformed XML (handles XML 1.1 declarations)
 
 ## Prioritized Backlog
 ### P0
